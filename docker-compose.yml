@@ -1,0 +1,89 @@
+version: '3.3'
+
+services:
+  db1:
+    image: lazyfrosch/mariadb-galera:10.1
+    build: .
+    hostname: db1
+    environment:
+      MYSQL_ROOT_PASSWORD: test123
+    ports:
+      - 3306:3306
+    volumes:
+      - ./galera.cnf:/etc/mysql/conf.d/galera.cnf:ro
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - db1:/var/lib/mysql
+    command: mysqld --wsrep-new-cluster  # Warning: use with care when the cluster is already running
+
+  db1_exporter:
+    restart: always
+    image: prom/mysqld-exporter
+    depends_on:
+      - db1
+    ports:
+      - 9141:9104
+    environment:
+      DATA_SOURCE_NAME: 'root:test123@(db1:3306)/mysql'
+
+  db2:
+    image: lazyfrosch/mariadb-galera:10.1
+    build: .
+    hostname: db2
+    depends_on:
+      - db1
+    environment:
+      DATABASE_ALREADY_EXISTS: 'true'
+    volumes:
+      - ./galera.cnf:/etc/mysql/conf.d/galera.cnf:ro
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - db2:/var/lib/mysql
+
+  db2_exporter:
+    restart: always
+    image: prom/mysqld-exporter
+    depends_on:
+      - db2
+    ports:
+      - 9142:9104
+    environment:
+      DATA_SOURCE_NAME: 'root:test123@(db2:3306)/mysql'
+
+  db3:
+    image: lazyfrosch/mariadb-galera:10.1
+    build: .
+    hostname: db3
+    depends_on:
+      - db1
+    environment:
+      DATABASE_ALREADY_EXISTS: 'true'
+    volumes:
+      - ./galera.cnf:/etc/mysql/conf.d/galera.cnf:ro
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - db3:/var/lib/mysql
+
+  db3_exporter:
+    restart: always
+    image: prom/mysqld-exporter
+    depends_on:
+      - db3
+    ports:
+      - 9143:9104
+    environment:
+      DATA_SOURCE_NAME: 'root:test123@(db3:3306)/mysql'
+
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - 9090:9090
+    volumes:
+      - prometheus_data:/prometheus
+      - ./prom:/config:ro
+    command:
+      - --config.file=/config/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+
+volumes:
+  db1:
+  db2:
+  db3:
+  prometheus_data:
